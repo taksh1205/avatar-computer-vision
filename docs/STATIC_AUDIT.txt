@@ -1,0 +1,11 @@
+Executed: python scripts/audit_notebooks.py
+Exit code: 0
+STDOUT:
+01_OSU_avatar_feature_creation_DROPBOX_FINAL_VERIFIED.ipynb: 8 code cells; 0 static findings
+01_OSU_avatar_feature_creation_female_ALL_FINAL.ipynb: 8 code cells; 0 static findings
+02_OSU_avatar_participant_aggregation_DROPBOX_FINAL.ipynb: 5 code cells; 0 static findings
+02_OSU_avatar_participant_aggregation_FINAL.ipynb: 5 code cells; 0 static findings
+OSU_avatar_feature_construction.ipynb: 5 code cells; 0 static findings
+
+STDERR:
+

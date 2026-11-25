@@ -1,0 +1,36 @@
+---
+title: "OSU Avatar Models — Female Image Scope"
+author: "Taksh Pathak"
+output: html_document
+---
+
+```{r setup, message=FALSE, warning=FALSE}
+required <- c("readr","dplyr","purrr","sandwich","lmtest","broom","tidyr")
+missing <- required[!vapply(required, requireNamespace, logical(1), quietly=TRUE)]
+if(length(missing)>0) stop("Install required packages: ", paste(missing,collapse=", "))
+library(readr); library(dplyr); library(purrr); library(sandwich); library(lmtest); library(broom); library(tidyr)
+base_dir <- normalizePath(getwd())
+out_dir <- file.path(base_dir,"outputs")
+d <- read_csv(file.path(out_dir,"d_osu_final_with_avatar_features_190.csv"),show_col_types=FALSE)
+stopifnot(nrow(d)==190, !anyDuplicated(d[c("Version.ID","User.ID")]))
+d_avatar <- d %>% filter(version_enc != "no_av") %>% mutate(version_enc=factor(version_enc),wd_flag=as.integer(wd_flag))
+controls <- c("robot_comfort","age","gender","racewhite","educ","subj_stress1")
+robust_tidy <- function(model){ct<-coeftest(model,vcov.=vcovHC(model,type="HC1")); ci<-coefci(model,vcov.=vcovHC(model,type="HC1")); tibble(term=rownames(ct),estimate=ct[,1],robust_se_HC1=ct[,2],robust_t=ct[,3],robust_p=ct[,4],ci_low_95=ci[,1],ci_high_95=ci[,2])}
+```
+
+```{r models}
+features <- c("first_female","last_female","first_logo","last_logo","first_happy","last_happy","first_formal_binary","final_formal_binary","proportion_female","proportion_logo","proportion_happy","changed_avatar","first_mean_saturation_0_255","final_mean_saturation_0_255","first_mean_brightness_0_255","final_mean_brightness_0_255","first_realism_texture_proxy_0_100","final_realism_texture_proxy_0_100","first_craftsmanship_complexity_proxy_0_100","final_craftsmanship_complexity_proxy_0_100")
+run_one <- function(feature,wd){
+ dat <- d_avatar %>% filter(wd_flag==wd) %>% select(serv_qual,version_enc,all_of(feature),all_of(controls)) %>% tidyr::drop_na()
+ if(nrow(dat)<12 || n_distinct(dat[[feature]])<2 || n_distinct(dat$version_enc)<2) return(tibble(feature=feature,wd_flag=wd,status="SKIPPED_INSUFFICIENT_VARIATION",n=nrow(dat)))
+ f <- as.formula(paste("serv_qual ~ version_enc * `", feature, "` + ", paste(controls, collapse=" + "), sep=""))
+ model <- lm(f,data=dat)
+ robust_tidy(model) %>% mutate(feature=feature,wd_flag=wd,status="ESTIMATED",n=nobs(model),.before=1)
+}
+results <- map_dfr(features,~bind_rows(run_one(.x,0),run_one(.x,1)))
+write_csv(results,file.path(out_dir,"model_coefficients_female_scope_R.csv"))
+summary <- results %>% count(feature,wd_flag,status,n,name="coefficient_rows")
+write_csv(summary,file.path(out_dir,"model_summary_female_scope_R.csv"))
+stopifnot(!any(results$status=="ERROR"))
+results
+```

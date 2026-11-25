@@ -1,0 +1,7 @@
+# Dependencies needed by the main Python notebook workflows; dataset and R dependencies are separate.
+notebook>=7,<8
+numpy>=1.26,<3
+pandas>=2.1,<3
+opencv-python-headless>=4.8,<5
+Pillow>=10,<13
+matplotlib>=3.8,<4

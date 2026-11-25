@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "avatar-vision-research"
+version = "0.3.0"
+description = "Privacy-preserving research engineering for robotic avatar feature extraction and session mapping"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["pandas>=2.0,<3", "numpy>=1.24,<3"]
+
+[project.optional-dependencies]
+vision = ["opencv-python-headless>=4.8,<5", "Pillow>=10,<13"]
+test = ["pytest>=8,<10"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

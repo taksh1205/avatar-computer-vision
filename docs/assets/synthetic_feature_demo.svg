@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 490" role="img" aria-labelledby="demo-title demo-desc">
+<title id="demo-title">Synthetic avatar image feature extraction demonstration</title>
+<desc id="demo-desc">Three original illustrated avatar designs and numeric OpenCV pixel statistics calculated from independent synthetic raster samples.</desc>
+<rect width="980" height="490" fill="#f8fafc"/>
+<text x="36" y="44" font-size="24" font-weight="700" fill="#16233d">Avatar Vision · feature extraction</text>
+<text x="36" y="71" font-size="13" fill="#49617d">Original illustrations; no research images, people or participant data</text>
+<rect x="36" y="93" width="294" height="352" rx="14" fill="white" stroke="#d4deea"/>
+<rect x="52" y="110" width="262" height="194" rx="10" fill="#e4f2ff"/>
+<rect x="79" y="245" width="209" height="59" rx="16" fill="#1b64a8"/>
+<circle cx="183" cy="192" r="65" fill="#ffd0a3" stroke="#3f5c8c" stroke-width="4"/>
+<circle cx="160" cy="188" r="6" fill="#3f5c8c"/>
+<circle cx="206" cy="188" r="6" fill="#3f5c8c"/>
+<path d="M 157 218 Q 183 235 209 218" stroke="#3f5c8c" fill="none" stroke-width="5" stroke-linecap="round"/>
+<text x="54" y="330" font-size="16" font-weight="700" fill="#16233d">Blue / simple</text>
+<text x="54" y="358" font-size="13" fill="#385271">Saturation: 79.7 / 255</text>
+<text x="54" y="380" font-size="13" fill="#385271">Edge density: 0.015</text>
+<text x="54" y="402" font-size="13" fill="#385271">Entropy: 1.47 bits</text>
+<text x="54" y="425" font-size="11" fill="#64748b">CV measures are synthetic-raster proxies</text>
+<rect x="352" y="93" width="294" height="352" rx="14" fill="white" stroke="#d4deea"/>
+<rect x="368" y="110" width="262" height="194" rx="10" fill="#fff0dd"/>
+<rect x="395" y="245" width="209" height="59" rx="16" fill="#d76236"/>
+<circle cx="499" cy="192" r="65" fill="#ffd1ae" stroke="#8b3d33" stroke-width="4"/>
+<circle cx="476" cy="188" r="6" fill="#8b3d33"/>
+<circle cx="522" cy="188" r="6" fill="#8b3d33"/>
+<path d="M 473 218 Q 499 235 525 218" stroke="#8b3d33" fill="none" stroke-width="5" stroke-linecap="round"/>
+<text x="370" y="330" font-size="16" font-weight="700" fill="#16233d">Warm / detailed</text>
+<text x="370" y="358" font-size="13" fill="#385271">Saturation: 76.4 / 255</text>
+<text x="370" y="380" font-size="13" fill="#385271">Edge density: 0.034</text>
+<text x="370" y="402" font-size="13" fill="#385271">Entropy: 1.52 bits</text>
+<text x="370" y="425" font-size="11" fill="#64748b">CV measures are synthetic-raster proxies</text>
+<rect x="668" y="93" width="294" height="352" rx="14" fill="white" stroke="#d4deea"/>
+<rect x="684" y="110" width="262" height="194" rx="10" fill="#e4f9ed"/>
+<rect x="711" y="245" width="209" height="59" rx="16" fill="#146d59"/>
+<circle cx="815" cy="192" r="65" fill="#f7c4a7" stroke="#263c2d" stroke-width="4"/>
+<circle cx="792" cy="188" r="6" fill="#263c2d"/>
+<circle cx="838" cy="188" r="6" fill="#263c2d"/>
+<path d="M 789 218 Q 815 235 841 218" stroke="#263c2d" fill="none" stroke-width="5" stroke-linecap="round"/>
+<text x="686" y="330" font-size="16" font-weight="700" fill="#16233d">Green / contrast</text>
+<text x="686" y="358" font-size="13" fill="#385271">Saturation: 72.7 / 255</text>
+<text x="686" y="380" font-size="13" fill="#385271">Edge density: 0.039</text>
+<text x="686" y="402" font-size="13" fill="#385271">Entropy: 1.55 bits</text>
+<text x="686" y="425" font-size="11" fill="#64748b">CV measures are synthetic-raster proxies</text>
+<text x="36" y="473" font-size="12" fill="#64748b">Measured values come from programmatic BGR raster sketches, not from the SVG illustration pixels.</text>
+</svg>

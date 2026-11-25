@@ -1,0 +1,395 @@
+```{r}
+library(dplyr)
+library(stringr)
+library(janitor)
+library(lubridate)
+
+out_dir <- file.path(dirname(rstudioapi::getSourceEditorContext()$path), "output")
+dir.create(out_dir, showWarnings = FALSE)
+
+
+# ── STUDY 1: ASU ─────────────────────────────────────────────
+
+robot_raw <- read.csv(
+  "/path/to/local-user/ASU Dropbox/Katsiaryna Siamionava/Research_ASU/Robot co-creation/Experiment_survey/RobotSurvey_v102225.csv"
+)
+robot_raw$User.ID    <- trimws(robot_raw$User.ID)
+robot_raw$Version.ID <- trimws(robot_raw$Version.ID)
+
+# Fitbit HR data is stored in the interview/LIWC file (not in the survey CSV)
+fitbit_asu <- read.csv(
+  "/path/to/local-user/ASU Dropbox/Katsiaryna Siamionava/Research_ASU/Robot co-creation/Interview Analysis/data_interview_liwc_results.csv",
+  stringsAsFactors = FALSE, check.names = TRUE
+)
+fitbit_asu$User.ID <- trimws(as.character(fitbit_asu$User.ID))
+fitbit_asu <- fitbit_asu %>%
+  select(User.ID, Fitbit1 = FitbitMeasure1, Fitbit2 = FitbitMeasure2) %>%
+  distinct(User.ID, .keep_all = TRUE)
+
+robot_raw <- robot_raw %>%
+  left_join(fitbit_asu, by = "User.ID")
+
+cat("ASU participants with Fitbit data:",
+    sum(!is.na(robot_raw$Fitbit1)), "of", nrow(robot_raw), "\n")
+
+asu <- robot_raw %>%
+  filter(as.character(X2.17) == "a") %>%          # completed drink order
+  filter(!User.ID %in% c(114, 209, 76))            # a priori exclusions
+
+cat("ASU rows after pre-screening:", nrow(asu), "\n")
+
+# Experimental conditions
+asu$wd_flag      <- ifelse(grepl("WD", asu$Version.ID), 1, 0)
+asu$version_code <- str_extract(asu$Version.ID, "V\\d+")
+asu$version_code <- relevel(as.factor(asu$version_code), ref = "V4")
+asu <- asu %>%
+  mutate(version_enc = case_when(
+    version_code == "V1" ~ "create_av",
+    version_code == "V2" ~ "human_av",
+    version_code == "V3" ~ "animal_av",
+    version_code == "V4" ~ "no_av",
+    TRUE                 ~ NA_character_
+  ))
+asu$version_enc <- relevel(as.factor(asu$version_enc), ref = "no_av")
+
+# Composites
+asu$X2.16.3_r    <- 8 - asu$X2.16.3
+asu$flawless     <- (asu$X2.16.1 + asu$X2.16.2 + asu$X2.16.3_r) / 3
+asu$sat          <- (asu$X2.7.1  + asu$X2.7.2  + asu$X2.7.3)    / 3
+asu$sat2         <- (asu$X2.8.1  + asu$X2.8.2  + asu$X2.8.3 +
+                      asu$X2.8.4 + asu$X2.8.5)                   / 5
+asu$serv_qual    <- (asu$X2.11.a + asu$X2.11.b + asu$X2.11.c)   / 3
+asu$reuse        <- (asu$X2.12.1 + asu$X2.12.2 + asu$X2.12.3)   / 3
+asu$unique_perc  <- (asu$X2.5.1  + asu$X2.5.2  + asu$X2.5.3)    / 3
+asu$custom_perc  <- (asu$X2.2.1  + asu$X2.2.2  + asu$X2.2.3)    / 3
+asu$close_perc   <- (asu$X2.13.1 + asu$X2.13.2 + asu$X2.13.3)   / 3
+asu$like_perc    <- (asu$X2.6.1  + asu$X2.6.2  + asu$X2.6.3)    / 3
+asu$control_perc <- (asu$X2.3.1  + asu$X2.3.2  + asu$X2.3.3)    / 3
+asu$effort_perc  <- (asu$X2.4.1  + asu$X2.4.2  + asu$X2.4.3)    / 3
+asu$design_attract <- (asu$X2.14.1 + asu$X2.14.2 + asu$X2.14.3) / 3
+
+asu$tip     <- suppressWarnings(as.numeric(ifelse(asu$X2.1.1 == "25+", 25, asu$X2.1.1)))
+asu$revisit <- ifelse(asu$X2.9 == "Yes", 1, 0)
+
+# Fix data-entry error: "1,7" recorded instead of "1" in X1.2
+asu$X1.2[asu$X1.2 == "1,7"] <- "1"
+asu$X1.2 <- as.numeric(as.character(asu$X1.2))
+
+asu$subj_stress1 <- (asu$X1.2 + (8 - asu$X1.1) + asu$X1.3 + asu$X1.4 +
+                       asu$X1.5 + asu$X1.7 + (8 - asu$X1.6)) / 7
+
+asu$racewhite <- as.numeric(ifelse(asu$X2.21 == "f", 1, 0))
+asu$gender    <- as.numeric(ifelse(asu$X2.18 == "Male", 1, 0))
+
+asu$X2.19 <- trimws(asu$X2.19)
+asu <- asu %>%
+  mutate(age = case_when(
+    X2.19 == "a" ~ 1, X2.19 == "b" ~ 2, X2.19 == "c" ~ 3,
+    X2.19 == "d" ~ 4, X2.19 == "e" ~ 5, X2.19 == "f" ~ 6,
+    TRUE ~ NA_real_
+  ))
+asu$educ <- trimws(asu$educ)
+asu <- asu %>%
+  mutate(educ = case_when(
+    educ == "a" ~ 1, educ == "b" ~ 2, educ == "c" ~ 3,
+    educ == "d" ~ 4, educ == "e" ~ 5, TRUE ~ NA_real_
+  ))
+asu$robot_familiar <- as.integer(asu$X2.22.a)
+asu$robot_comfort  <- as.integer(asu$X2.22.b)
+
+# Complete-case filter
+cols_asu <- c(
+  "X2.16.1","X2.16.2","X2.16.3","X2.7.1","X2.7.2","X2.7.3",
+  "X2.11.a","X2.11.b","X2.11.c","X2.5.1","X2.5.2","X2.5.3",
+  "X2.1.1","version_code","educ","age","racewhite","gender",
+  "X2.9","X2.22.a","X2.22.b","subj_stress1"
+)
+cols_asu <- cols_asu[cols_asu %in% names(asu)]
+asu <- asu[complete.cases(asu[, cols_asu]), ]
+asu$version_enc <- relevel(as.factor(asu$version_enc), ref = "no_av")
+cat("ASU N after complete-case filter:", nrow(asu), "\n")
+
+# Cook's distance — flag influential observations
+cutoff_asu <- 4 / nrow(asu)
+cook_models_asu <- list(
+  unique   = lm(X2.5.1  ~ as.factor(version_code) * wd_flag, data = asu),
+  flawless = lm(flawless    ~ version_enc * wd_flag,             data = asu)
+)
+cook_list_asu <- lapply(cook_models_asu, cooks.distance)
+
+top10_asu <- lapply(names(cook_list_asu), function(nm) {
+  cd  <- cook_list_asu[[nm]]
+  idx <- order(cd, decreasing = TRUE)[1:min(10, length(cd))]
+  data.frame(model = nm, User.ID = asu$User.ID[idx],
+             cooks_d = round(cd[idx], 5), above_cutoff = cd[idx] > cutoff_asu)
+}) %>% bind_rows()
+
+influence_asu <- top10_asu %>%
+  filter(above_cutoff) %>%
+  group_by(User.ID) %>%
+  summarise(n_models = n(), max_cooks_d = max(cooks_d), .groups = "drop") %>%
+  arrange(desc(n_models), desc(max_cooks_d))
+
+cat("\nASU influential participants (above 4/n threshold):\n")
+print(influence_asu, row.names = FALSE)
+
+rm_top3_asu <- influence_asu$User.ID[1:min(3, nrow(influence_asu))]
+cat("ASU rm_top3_infl — removing:", rm_top3_asu, "\n")
+
+d_asu <- asu %>% filter(!User.ID %in% rm_top3_asu)
+d_asu$version_enc <- relevel(as.factor(d_asu$version_enc), ref = "no_av")
+cat("ASU final N:", nrow(d_asu), "\n")
+print(table(d_asu$version_enc, d_asu$wd_flag))
+
+```
+
+```{r}
+
+# ── STUDY 2: OSU ─────────────────────────────────────────────
+osu_avatar= read.csv("/path/to/local-user/ASU Dropbox/Katsiaryna Siamionava/Research_ASU/Robot co-creation/Taksh/Taksh_OSU_FINAL_Submission_Package/Taksh_OSU_FINAL_Analysis_Data.csv")
+
+avatar_cols <- c("Version.ID", "User.ID",
+  "time_of_day", "mapping_status", "mapping_confidence", "structure_match",
+  "match_diff_minutes", "robot_session_id", "session_file_name",
+  "avatar_1", "avatar_2", "avatar_3",
+  "avatar_1_gender", "avatar_2_gender", "avatar_3_gender",
+  "distinct_avatars_created_v1", "interaction_intensity_v1",
+  "user_gender_label", "first_avatar_gender_match", "any_avatar_gender_match",
+  "final_avatar_gender_match", "final_avatar_name", "final_avatar_gender",
+  "final_avatar_emotion", "final_avatar_color", "final_avatar_attire",
+  "final_avatar_logo_binary", "final_avatar_variant",
+  "avatar_female_binary", "avatar_happy_binary", "avatar_formal_binary",
+  "realism_proxy_0_100", "realism_style",
+  "craftsmanship_complexity_proxy_0_100", "craftsmanship_level",
+  "realism_proxy_z", "craftsmanship_proxy_z",
+  "total_time_seconds", "time_AVATAR_CUSTOMIZER_seconds",
+  "page_sequence", "avatar_feature_available", "analysis_note"
+)
+osu_avatar_sub <- osu_avatar[, avatar_cols]
+
+osu_raw <- read.csv(
+  "/path/to/local-user/ASU Dropbox/Katsiaryna Siamionava/Research_ASU/Claude_experiments/Robot co-creation/Data/robot_survey_OSU data(robot_survey_OSU data).csv",
+  fileEncoding = "latin1", check.names = FALSE, stringsAsFactors = FALSE
+)
+osu <- osu_raw %>% clean_names()
+cat("\nOSU raw rows:", nrow(osu), "\n")
+
+osu <- osu %>% rename(
+  Version.ID = version, User.ID = user_id,
+  Fitbit1 = fitbit1, Fitbit2 = fitbit2,
+  X1.1 = x1_1_calm, X1.2 = x1_2_stressed, X1.3 = x1_3_anxious,
+  X1.4 = x1_4_aroused, X1.5 = x1_5_tired, X1.6 = x1_6_relaxed, X1.7 = x1_7_depressed,
+  X2.1 = x2_1_calm, X2.2 = x2_2_stressed, X2.3 = x2_3_anxious,
+  X2.4 = x2_4_aroused, X2.5 = x2_5_tired, X2.6 = x2_6_relaxed, X2.7 = x2_7_depressed,
+  X2.2.1 = x2_2_1_he_interaction_with_the_service_robot_felt_tailored_to_me,
+  X2.2.2 = x2_2_2_felt_personalized,
+  X2.2.3 = x2_2_3_the_service_robot_customized_the_interaction_to_me,
+  X2.3.1 = x2_3_1_great_deal_of_control_over_the_service_robot,
+  X2.3.2 = x_2_3_2_had_a_significant_influence_over_the_outcome,
+  X2.3.3 = x2_3_3_i_made_a_significant_contribution_to_the_interaction,
+  X2.4.1 = x2_4_1_the_process_of_interacting_with_this_service_robot_was_exhausting,
+  X2.4.2 = x2_4_2_t_ime_consuming,
+  X2.4.3 = x_2_4_3_l_aborious,
+  X2.5.1 = x2_5_1_robot_expresses_my_unique_personality,
+  X2.5.2 = x2_5_2_it_makes_me_feel_unique,
+  X2.5.3 = x2_5_3_reflects_my_uniqueness,
+  X2.6.1 = x2_6_1_i_like_the_service_robot,
+  X2.6.2 = x2_6_2_my_idea_of_a_perfect_service_robot,
+  X2.6.3 = x_2_6_3_service_robot_looks_really_great,
+  X2.7.1 = x2_7_1_how_satisf_actory,
+  X2.7.2 = x2_7_2_meet_your_needs,
+  X2.7.3 = x_2_7_3_you_are_satisfied_with_the_experience,
+  X2.8.1 = x2_8_1_how_do_you_feel_about_your_interaction,
+  X2.8.2 = x2_8_2_to_what_extent_would_you_feel_satisfied,
+  X2.8.3 = x2_8_3_imagine_a_service_robot_interaction_that_is_perfect,
+  X2.8.4 = x_2_8_4_how_do_you_think_you_would_react_after_the_visit,
+  X2.8.5 = x2_8_5_i_will_say_positive_things_about_the_robo_cafe_experience_to_other_people,
+  X2.9   = x2_9,
+  X2.9.1 = x2_9_1_are_you_willing_to_revisit_the_robo_cafe,
+  X2.9.2 = x2_9_2_will_you_recommend,
+  X2.10  = x2_10,
+  tip_robot    = x_2_10_1_tip_the_service_robot,
+  tip_human    = x2_10_2_tip_the_human_service_staff,
+  tip_discount = x2_10_3_discount_as_a_compensation_in_case_of_the_robot_service_failure,
+  X2.11.a = x2_11a_the_service_was, X2.11.b = x2_11b_the_service_was,
+  X2.11.c = x2_11c_the_service_was,
+  X2.12.1 = x_2_12_1_i_am_willing_to_interact_with_th_is_service_robot,
+  X2.12.2 = x_2_12_2_i_would_use_th_is_service_robot,
+  X2.12.3 = x_2_12_3_i_am_willing_to_order_food_drink_from_th_is_service_robot,
+  X2.13.1 = x2_13_1_closeness_to_this_service_robot,
+  X2.13.2 = x2_13_2_personal_ownership,
+  X2.13.3 = x2_13_3_service_robot_incorporate_s_a_part_of_myself,
+  X2.14.1 = x2_14_1_appealing_design,
+  X2.14.2 = x2_14_2_obot_ordering_system_is_attractive,
+  X2.14.3 = x2_14_3_design_of_the_service_robot_ordering_system_looks_great,
+  X2.15   = x2_15_the_service_robot_seem_like_a_person_or_a_machine,
+  X2.16.1 = x2_16_1_robot_fulfilled_my_basic_service_need,
+  X2.16.2 = x2_16_2_robot_performed_the_core_service,
+  X2.16.3 = x2_16_3_delivery_was_f_lawed_or_deficient,
+  X2.17   = x2_17_what_purchase_did_you_complete,
+  X2.18   = x2_18_gender, X2.19 = x2_19_age,
+  X2.20   = x2_20_level_of_education, X2.21 = x2_21_race,
+  X2.22.a = x2_22a_are_your_familiar_with_service_robots,
+  X2.22.b = x2_22b_do_you_feel_comfortable_using_service_robots,
+  wd_flag = correct_0_incorrect_1_drinks
+)
+
+osu$User.ID    <- trimws(osu$User.ID)
+osu$Version<- trimws(osu$Version)
+
+
+osu <- osu %>%
+  mutate(version_enc = case_when(
+    Version == "v1r" ~ "create_av",
+    Version == "v2r" ~ "human_av",
+    Version == "v4r" ~ "no_av",
+    TRUE                 ~ NA_character_
+  ))
+osu$version_enc <- relevel(as.factor(osu$version_enc), ref = "no_av")
+
+# Numeric conversion (letter-coded vars excluded)
+to_num <- function(x) suppressWarnings(as.numeric(x))
+num_cols_osu <- c(
+  "X1.1","X1.2","X1.3","X1.4","X1.5","X1.6","X1.7",
+  "X2.1","X2.2","X2.3","X2.4","X2.5","X2.6","X2.7",
+  "X2.2.1","X2.2.2","X2.2.3","X2.3.1","X2.3.2","X2.3.3",
+  "X2.4.1","X2.4.2","X2.4.3","X2.5.1","X2.5.2","X2.5.3",
+  "X2.6.1","X2.6.2","X2.6.3","X2.7.1","X2.7.2","X2.7.3",
+  "X2.8.1","X2.8.2","X2.8.3","X2.8.4","X2.8.5",
+  "X2.11.a","X2.11.b","X2.11.c",
+  "X2.12.1","X2.12.2","X2.12.3","X2.13.1","X2.13.2","X2.13.3",
+  "X2.14.1","X2.14.2","X2.14.3",
+  "X2.15","X2.16.1","X2.16.2","X2.16.3","X2.22.a","X2.22.b",
+  "Fitbit1","Fitbit2"
+)
+num_cols_osu <- num_cols_osu[num_cols_osu %in% names(osu)]
+osu <- osu %>% mutate(across(all_of(num_cols_osu), to_num))
+
+# Recode letter-coded items
+osu$X2.9.1 <- case_when(
+  trimws(as.character(osu$X2.9.1)) == "a" ~ 1,
+  trimws(as.character(osu$X2.9.1)) == "b" ~ 0,
+  TRUE ~ NA_real_
+)
+osu$X2.9.2 <- suppressWarnings(as.numeric(trimws(as.character(osu$X2.9.2))))
+tip_pct_map  <- c(a=0, b=10, c=15, d=18, e=20, f=25, g=30)
+disc_pct_map <- c(a=0, b=10, c=15, d=18, e=20, f=25)
+osu$tip_robot    <- unname(tip_pct_map[trimws(as.character(osu$tip_robot))])
+osu$tip_human    <- unname(tip_pct_map[trimws(as.character(osu$tip_human))])
+osu$tip_discount <- unname(disc_pct_map[trimws(as.character(osu$tip_discount))])
+
+# Composites
+osu$X2.16.3_r  <- 8 - osu$X2.16.3
+osu$flawless   <- (osu$X2.16.1 + osu$X2.16.2 + osu$X2.16.3_r) / 3
+osu$sat        <- (osu$X2.7.1  + osu$X2.7.2  + osu$X2.7.3)    / 3
+osu$sat2       <- (osu$X2.8.1  + osu$X2.8.2  + osu$X2.8.3 +
+                    osu$X2.8.4 + osu$X2.8.5)                   / 5
+osu$serv_qual  <- (osu$X2.11.a + osu$X2.11.b + osu$X2.11.c)   / 3
+osu$reuse      <- (osu$X2.12.1 + osu$X2.12.2 + osu$X2.12.3)   / 3
+osu$unique_perc  <- (osu$X2.5.1  + osu$X2.5.2  + osu$X2.5.3)  / 3
+osu$custom_perc  <- (osu$X2.2.1  + osu$X2.2.2  + osu$X2.2.3)  / 3
+osu$close_perc   <- (osu$X2.13.1 + osu$X2.13.2 + osu$X2.13.3) / 3
+osu$like_perc    <- (osu$X2.6.1  + osu$X2.6.2  + osu$X2.6.3)  / 3
+osu$control_perc <- (osu$X2.3.1  + osu$X2.3.2  + osu$X2.3.3)  / 3
+osu$effort_perc  <- (osu$X2.4.1  + osu$X2.4.2  + osu$X2.4.3)  / 3
+osu$design_attract <- (osu$X2.14.1 + osu$X2.14.2 + osu$X2.14.3) / 3
+
+osu$subj_stress1 <- (osu$X1.2 + (8 - osu$X1.1) + osu$X1.3 + osu$X1.4 +
+                       osu$X1.5 + osu$X1.7 + (8 - osu$X1.6)) / 7
+
+osu$racewhite <- as.numeric(ifelse(osu$X2.21 == "f", 1, 0))
+osu$gender    <- with(osu, ifelse(X2.18 == "a", 1, ifelse(X2.18 == "b", 0, NA)))
+osu$revisit   <- osu$X2.9.1
+
+osu$X2.19 <- trimws(osu$X2.19)
+osu <- osu %>%
+  mutate(age = case_when(
+    X2.19 == "a" ~ 1, X2.19 == "b" ~ 2, X2.19 == "c" ~ 3,
+    X2.19 == "d" ~ 4, X2.19 == "e" ~ 5, X2.19 == "f" ~ 6,
+    TRUE ~ NA_real_
+  ))
+osu$X2.20 <- trimws(osu$X2.20)
+osu <- osu %>%
+  mutate(educ = case_when(
+    X2.20 == "a" ~ 1, X2.20 == "b" ~ 2, X2.20 == "c" ~ 3,
+    X2.20 == "d" ~ 4, X2.20 == "e" ~ 5, TRUE ~ NA_real_
+  ))
+osu$robot_familiar <- as.integer(osu$X2.22.a)
+osu$robot_comfort  <- as.integer(osu$X2.22.b)
+
+t_parsed    <- parse_date_time(osu$time1, orders = c("H:M", "I:M p"))
+osu$time_of_day <- cut(hour(t_parsed), breaks = c(-Inf, 12, 17, Inf),
+                       labels = c("morning", "afternoon", "evening"))
+
+# Drink-order filter and complete-case filter
+osu <- osu %>% filter(as.character(X2.17) == "a")
+osu$version_enc <- relevel(as.factor(osu$version_enc), ref = "no_av")
+
+
+cols_osu <- c(
+  "X2.16.1","X2.16.2","X2.16.3","X2.7.1","X2.7.2","X2.7.3",
+  "X2.11.a","X2.11.b","X2.11.c","X2.5.1","X2.5.2","X2.5.3",
+  "version_code","educ","age","racewhite","gender",
+  "X2.9","time_of_day","subj_stress1","X2.22.b"
+)
+cols_osu <- cols_osu[cols_osu %in% names(osu)]
+osu <- osu[complete.cases(osu[, cols_osu]), ]
+osu$version_enc <- relevel(as.factor(osu$version_enc), ref = "no_av")
+cat("OSU N after complete-case filter:", nrow(osu), "\n")
+
+
+osu_avatar_sub <- osu_avatar[, avatar_cols]
+
+# Inner join on Version.ID and User.ID
+osu <- merge(
+  osu,
+  osu_avatar_sub,
+  by = c("Version.ID", "User.ID"),
+  all = FALSE  # inner join
+)
+
+
+# Cook's distance — OSU
+cutoff_osu <- 4 / nrow(osu)
+cook_models_osu <- list(
+  unique   = lm(X2.5.1  ~ as.factor(version_enc) * wd_flag, data = osu),
+  flawless = lm(flawless    ~ version_enc * wd_flag,             data = osu)
+)
+cook_list_osu <- lapply(cook_models_osu, cooks.distance)
+
+top10_osu <- lapply(names(cook_list_osu), function(nm) {
+  cd  <- cook_list_osu[[nm]]
+  idx <- order(cd, decreasing = TRUE)[1:min(10, length(cd))]
+  data.frame(model = nm, User.ID = osu$User.ID[idx],
+             cooks_d = round(cd[idx], 5), above_cutoff = cd[idx] > cutoff_osu)
+}) %>% bind_rows()
+
+influence_osu <- top10_osu %>%
+  filter(above_cutoff) %>%
+  group_by(User.ID) %>%
+  summarise(n_models = n(), max_cooks_d = max(cooks_d), .groups = "drop") %>%
+  arrange(desc(n_models), desc(max_cooks_d))
+
+cat("\nOSU influential participants (above 4/n threshold):\n")
+print(influence_osu, row.names = FALSE)
+
+rm_top3_osu <- influence_osu$User.ID[1:min(3, nrow(influence_osu))]
+cat("OSU rm_top3_infl — removing:", rm_top3_osu, "\n")
+
+d_osu <- osu %>% filter(!User.ID %in% rm_top3_osu)
+d_osu$version_enc <- relevel(as.factor(d_osu$version_enc), ref = "no_av")
+cat("OSU final N:", nrow(d_osu), "\n")
+print(table(d_osu$version_enc, d_osu$wd_flag)) 
+```
+
+```{r}
+# ── Save ──────────────────────────────────────────────────────
+out_dir="/path/to/local-user/ASU Dropbox/Katsiaryna Siamionava/Research_ASU/Claude_experiments/Robot co-creation/Codes/output"
+write.csv(d_asu, file.path(out_dir, "d_asu_final.csv"), row.names = FALSE)
+write.csv(d_osu, file.path(out_dir, "d_osu_final.csv"), row.names = FALSE)
+
+cat("\nSaved:\n",
+    file.path(out_dir, "d_asu_final.csv"), "  N =", nrow(d_asu), "\n",
+    file.path(out_dir, "d_osu_final.csv"), "  N =", nrow(d_osu), "\n")
+```
+

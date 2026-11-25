@@ -1,0 +1,356 @@
+---
+title: "Analysis: Service Quality & Fitbit"
+subtitle: "Policy: rm_top3_infl | Controls: robot_comfort + age + gender + racewhite + educ + subj_stress1"
+output:
+  html_notebook:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    theme: flatly
+---
+
+```{r setup, message=FALSE, warning=FALSE}
+library(dplyr)
+library(sandwich)
+library(lmtest)
+library(stargazer)
+library(emmeans)
+library(ggplot2)
+
+# When knitting, working directory = file location; use relative paths
+out_dir <- "output"
+fig_dir <- "figures"
+dir.create(fig_dir, showWarnings = FALSE)
+```
+
+```{r load-data}
+d_asu <- read.csv('/path/to/local-user/ASU Dropbox/Katsiaryna Siamionava/Research_ASU/Claude_experiments/Robot co-creation/Codes/output/d_asu_final.csv')
+d_osu <- read.csv('/path/to/local-user/ASU Dropbox/Katsiaryna Siamionava/Research_ASU/Claude_experiments/Robot co-creation/Codes/output/d_osu_final.csv')
+d_asu$version_enc <- relevel(as.factor(d_asu$version_enc), ref = "no_av")
+d_osu$version_enc <- relevel(as.factor(d_osu$version_enc), ref = "no_av")
+
+cat("ASU N =", nrow(d_asu), " | OSU N =", nrow(d_osu), "\n")
+```
+
+
+# 1. Service Quality Regressions
+
+```{r serv-qual-models}
+model1 <- lm(serv_qual ~ wd_flag * version_enc +
+               robot_comfort + age + gender + racewhite + educ + subj_stress1,
+             data = d_asu)
+
+model2 <- lm(serv_qual ~ wd_flag * version_enc +
+               robot_comfort + age + gender + racewhite + educ + subj_stress1,
+             data = d_osu)
+
+robust_se1 <- sqrt(diag(vcovHC(model1, type = "HC1")))
+robust_se2 <- sqrt(diag(vcovHC(model2, type = "HC1")))
+```
+
+```{r serv-qual-table, results='asis'}
+stargazer(model1, model2, type = "latex",
+          title = "Service Quality: ASU and OSU (rm_top3_infl)",
+          se = list(robust_se1, robust_se2),
+          column.labels = c("Study 1 (ASU)", "Study 2 (OSU)"),
+          dep.var.labels = "Service Quality",
+          omit.stat = c("f", "ser"),
+          notes = "HC1 robust standard errors in parentheses.",
+          notes.append = FALSE,
+          star.cutoffs = c(0.10, 0.05, 0.01))
+```
+
+```{r serv-qual-latex, include=FALSE}
+# Save LaTeX version for paper
+stargazer(model1, model2, type = "latex",
+          out = file.path(out_dir, "table_serv_qual.tex"),
+          title = "Effect of Avatar Co-Creation and Service Failure on Service Quality",
+          label = "tab:serv_qual",
+          se = list(robust_se1, robust_se2),
+          column.labels = c("Study 1 (ASU)", "Study 2 (OSU)"),
+          dep.var.labels = "Service Quality",
+          covariate.labels = c(
+            "Service failure (wd\\_flag)",
+            "Create avatar", "Human avatar", "Animal avatar",
+            "Robot comfort", "Age", "Gender (male)",
+            "Race (White)", "Education", "Baseline stress",
+            "Failure $\\times$ Create avatar",
+            "Failure $\\times$ Human avatar",
+            "Failure $\\times$ Animal avatar"
+          ),
+          omit.stat = c("f", "ser"),
+          notes = "HC1 robust standard errors in parentheses.",
+          notes.append = FALSE,
+          star.cutoffs = c(0.10, 0.05, 0.01))
+cat("LaTeX table saved to", file.path(out_dir, "table_serv_qual.tex"), "\n")
+```
+
+
+
+
+
+
+# 2. Manipulation Checks
+
+## 2.1 Avatar Check (X2.5.1 ~ version_enc)
+
+### Study 1 (ASU)
+
+```{r mc-avatar-asu}
+mc_av_asu <- aov(X2.5.1 ~ version_enc, data = d_asu)
+summary(mc_av_asu)
+```
+
+```{r mc-avatar-asu-contrasts}
+em_asu <- emmeans(mc_av_asu, ~ version_enc)
+cat("Planned contrasts vs. no_av:\n")
+contrast(em_asu, method = "trt.vs.ctrl", ref = 1)
+```
+
+```{r mc-avatar-asu-tukey}
+cat("All pairwise (Tukey HSD):\n")
+TukeyHSD(mc_av_asu)
+```
+
+### Study 2 (OSU)
+
+```{r mc-avatar-osu}
+mc_av_osu <- aov(X2.5.1 ~ version_enc, data = d_osu)
+summary(mc_av_osu)
+```
+
+```{r mc-avatar-osu-contrasts}
+em_osu <- emmeans(mc_av_osu, ~ version_enc)
+cat("Planned contrasts vs. no_av:\n")
+contrast(em_osu, method = "trt.vs.ctrl", ref = 1)
+```
+
+```{r mc-avatar-osu-tukey}
+cat("All pairwise (Tukey HSD):\n")
+TukeyHSD(mc_av_osu)
+```
+
+## 2.2 Service Failure Check (flawless ~ wd_flag)
+
+### Study 1 (ASU)
+
+```{r mc-failure-asu}
+d_asu %>% group_by(wd_flag) %>%
+  summarise(n = n(), mean = round(mean(flawless, na.rm=TRUE), 3),
+            sd = round(sd(flawless, na.rm=TRUE), 3), .groups="drop") %>%
+  mutate(condition = ifelse(wd_flag==1, "Wrong drink", "Correct drink"))
+
+tt_asu <- t.test(flawless ~ wd_flag, data = d_asu)
+print(tt_asu)
+
+g0 <- d_asu$flawless[d_asu$wd_flag == 0]
+g1 <- d_asu$flawless[d_asu$wd_flag == 1]
+cat(sprintf("Cohen's d: %.3f\n",
+  (mean(g1, na.rm=TRUE) - mean(g0, na.rm=TRUE)) /
+  sqrt((var(g0, na.rm=TRUE) + var(g1, na.rm=TRUE)) / 2)))
+```
+
+### Study 2 (OSU)
+
+```{r mc-failure-osu}
+d_osu %>% group_by(wd_flag) %>%
+  summarise(n = n(), mean = round(mean(flawless, na.rm=TRUE), 3),
+            sd = round(sd(flawless, na.rm=TRUE), 3), .groups="drop") %>%
+  mutate(condition = ifelse(wd_flag==1, "Wrong drink", "Correct drink"))
+
+tt_osu <- t.test(flawless ~ wd_flag, data = d_osu)
+print(tt_osu)
+
+g0 <- d_osu$flawless[d_osu$wd_flag == 0]
+g1 <- d_osu$flawless[d_osu$wd_flag == 1]
+cat(sprintf("Cohen's d: %.3f\n",
+  (mean(g1, na.rm=TRUE) - mean(g0, na.rm=TRUE)) /
+  sqrt((var(g0, na.rm=TRUE) + var(g1, na.rm=TRUE)) / 2)))
+```
+
+## 2.3 Manipulation Check Plots
+
+```{r mc-plots, fig.width=9, fig.height=3.5, warning=FALSE}
+plot_theme <- theme_minimal(base_size = 12) +
+  theme(panel.grid.minor = element_blank(), axis.title.x = element_blank())
+
+p1 <- d_asu %>%
+  group_by(version_enc) %>%
+  summarise(mean = mean(X2.5.1, na.rm=TRUE),
+            se   = sd(X2.5.1, na.rm=TRUE) / sqrt(sum(!is.na(X2.5.1))),
+            .groups = "drop") %>%
+  ggplot(aes(x = version_enc, y = mean, fill = version_enc)) +
+  geom_col(width = 0.6, show.legend = FALSE) +
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.2) +
+  scale_fill_brewer(palette = "Set2") +
+  scale_x_discrete(labels = c("Create", "Human", "Animal", "None")) +
+  labs(title = "Avatar check — Study 1 (ASU)", y = "Uniqueness (1–7)") +
+  plot_theme
+
+p2 <- d_osu %>%
+  group_by(version_enc) %>%
+  summarise(mean = mean(X2.5.1, na.rm=TRUE),
+            se   = sd(X2.5.1, na.rm=TRUE) / sqrt(sum(!is.na(X2.5.1))),
+            .groups = "drop") %>%
+  ggplot(aes(x = version_enc, y = mean, fill = version_enc)) +
+  geom_col(width = 0.6, show.legend = FALSE) +
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.2) +
+  scale_fill_brewer(palette = "Set2") +
+  scale_x_discrete(labels = c("Create", "Human", "None")) +
+  labs(title = "Avatar check — Study 2 (OSU)", y = "Uniqueness (1–7)") +
+  plot_theme
+
+p3 <- d_asu %>%
+  mutate(condition = ifelse(wd_flag == 1, "Wrong drink\n(failure)", "Correct drink")) %>%
+  group_by(condition) %>%
+  summarise(mean = mean(flawless, na.rm=TRUE),
+            se   = sd(flawless, na.rm=TRUE) / sqrt(sum(!is.na(flawless))),
+            .groups = "drop") %>%
+  ggplot(aes(x = condition, y = mean, fill = condition)) +
+  geom_col(width = 0.5, show.legend = FALSE) +
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.2) +
+  scale_fill_manual(values = c("steelblue", "tomato")) +
+  labs(title = "Failure check — Study 1 (ASU)", y = "Flawless service (1–7)") +
+  plot_theme
+
+p4 <- d_osu %>%
+  mutate(condition = ifelse(wd_flag == 1, "Wrong drink\n(failure)", "Correct drink")) %>%
+  group_by(condition) %>%
+  summarise(mean = mean(flawless, na.rm=TRUE),
+            se   = sd(flawless, na.rm=TRUE) / sqrt(sum(!is.na(flawless))),
+            .groups = "drop") %>%
+  ggplot(aes(x = condition, y = mean, fill = condition)) +
+  geom_col(width = 0.5, show.legend = FALSE) +
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.2) +
+  scale_fill_manual(values = c("steelblue", "tomato")) +
+  labs(title = "Failure check — Study 2 (OSU)", y = "Flawless service (1–7)") +
+  plot_theme
+
+gridExtra::grid.arrange(p1, p2, p3, p4, nrow = 1)
+```
+
+```{r mc-plots-save, include=FALSE}
+ggsave(file.path(fig_dir, "mc_avatar_asu.pdf"),  p1, width = 4.5, height = 3.5)
+ggsave(file.path(fig_dir, "mc_avatar_osu.pdf"),  p2, width = 4.5, height = 3.5)
+ggsave(file.path(fig_dir, "mc_failure_asu.pdf"), p3, width = 3.5, height = 3.5)
+ggsave(file.path(fig_dir, "mc_failure_osu.pdf"), p4, width = 3.5, height = 3.5)
+cat("Figures saved to", fig_dir, "\n")
+```
+
+
+
+
+
+
+
+# 3. Fitbit Analysis
+
+**Fitbit1** = HR before interaction; **Fitbit2** = HR after interaction.
+ASU Fitbit data joined from interview/LIWC file; OSU from survey CSV.
+
+Five operationalizations of the Fitbit DV:
+
+| Variable | Definition |
+|---|---|
+| `fitbit_diff` | Fitbit2 − Fitbit1 (raw bpm change) |
+| `fitbit_pct` | % change = (Fitbit2 − Fitbit1) / Fitbit1 × 100 |
+| `fitbit_hi_mean` | 1 if diff > mean(diff) — LPM |
+| `fitbit_hi_med` | 1 if diff > median(diff) — LPM |
+| `fitbit_hi_q75` | 1 if diff > 75th percentile(diff) — LPM |
+
+## 3.1 Construct Fitbit DVs
+
+```{r fitbit-dvs}
+make_fitbit_dvs <- function(d) {
+  d$fitbit_diff    <- d$Fitbit2 - d$Fitbit1
+  d$fitbit_pct     <- ifelse(d$Fitbit1 == 0 | is.na(d$Fitbit1), NA,
+                             (d$Fitbit2 - d$Fitbit1) / d$Fitbit1 * 100)
+  diff_vals        <- d$fitbit_diff
+  d$fitbit_hi_mean <- as.integer(diff_vals > mean(diff_vals,   na.rm = TRUE))
+  d$fitbit_hi_med  <- as.integer(diff_vals > median(diff_vals, na.rm = TRUE))
+  d$fitbit_hi_q75  <- as.integer(diff_vals > quantile(diff_vals, 0.75, na.rm = TRUE))
+  d
+}
+
+d_asu <- make_fitbit_dvs(d_asu)
+d_osu <- make_fitbit_dvs(d_osu)
+
+cat("ASU — N with Fitbit data:",
+    sum(!is.na(d_asu$Fitbit1) & !is.na(d_asu$Fitbit2)), "of", nrow(d_asu), "\n")
+cat("OSU — N with Fitbit data:",
+    sum(!is.na(d_osu$Fitbit1) & !is.na(d_osu$Fitbit2)), "of", nrow(d_osu), "\n")
+```
+
+## 3.2 Descriptives
+
+```{r fitbit-desc}
+cat("ASU:\n")
+summary(d_asu[, c("Fitbit1","Fitbit2","fitbit_diff","fitbit_pct")])
+
+cat("\nOSU:\n")
+summary(d_osu[, c("Fitbit1","Fitbit2","fitbit_diff","fitbit_pct")])
+```
+
+
+
+## 3.4 Regression Tables (ASU vs. OSU)
+
+```{r fitbit-tables, results='asis', warning=FALSE}
+ctrl_rhs   <- "robot_comfort + age + gender + racewhite + educ + subj_stress1"
+fitbit_dvs <- c("fitbit_diff","fitbit_pct",
+                "fitbit_hi_mean","fitbit_hi_med","fitbit_hi_q75")
+for (dv in fitbit_dvs) {
+  f      <- as.formula(paste(dv, "~ wd_flag * version_enc +", ctrl_rhs))
+  m_asu  <- lm(f, data = d_asu )
+  m_osu  <- lm(f, data = d_osu)
+  se_asu <- sqrt(diag(vcovHC(m_asu, type = "HC1")))
+  se_osu <- sqrt(diag(vcovHC(m_osu, type = "HC1")))
+
+  stargazer(m_asu, m_osu, type = "text",
+            title = paste("Fitbit DV:", dv),
+            se = list(se_asu, se_osu),
+            column.labels = c("ASU", "OSU"),
+            
+         
+            omit.stat = c("f","ser"),
+            star.cutoffs = c(0.10, 0.05, 0.01))
+}
+```
+
+
+#4 Avatar Analysis
+
+
+# 1. Service Quality Regressions
+
+```{r serv-qual-models}
+d_osu$distinct_avatars_created_v1[is.na(d_osu$distinct_avatars_created_v1)] <- 0
+d_osu$time_AVATAR_CUSTOMIZER_seconds[is.na(d_osu$time_AVATAR_CUSTOMIZER_seconds)] <- 0
+
+d_osu_av <- d_osu[d_osu$version_enc != "no_av", ]
+#d_osu_av <- d_osu_av[d_osu_av$wd_flag != 0, ]
+d_osu_av$version_enc <- relevel(factor(d_osu_av$version_enc), ref = "human_av")
+#model1 <- lm(serv_qual ~ wd_flag*avatar_1_gender +version_enc +robot_comfort + age + gender + racewhite + educ + subj_stress1, data = d_osu_av)
+
+#model1 <- lm(serv_qual ~ wd_flag*avatar_formal_binary +robot_comfort + age + gender + racewhite + educ + subj_stress1, data = d_osu_av)
+
+#model1 <- lm(serv_qual ~ wd_flag*avatar_female_binary+robot_comfort + age + gender + racewhite + educ + subj_stress1, data = d_osu_av)
+
+model1 <- lm(serv_qual ~ wd_flag*time_AVATAR_CUSTOMIZER_seconds+robot_comfort + age + gender + racewhite + educ + subj_stress1, data = d_osu_av)
+
+robust_se1 <- sqrt(diag(vcovHC(model1, type = "HC1")))
+stargazer(model1,  type = "text",
+          title = "Service Quality: ASU and OSU (rm_top3_infl)",
+          se = list(robust_se1),
+          column.labels = c("Study 2 (OSU)"),
+          dep.var.labels = "Service Quality",
+          omit.stat = c("f", "ser"),
+          notes = "HC1 robust standard errors in parentheses.",
+          notes.append = FALSE,
+          star.cutoffs = c(0.10, 0.05, 0.01))
+
+```
+
+```{r serv-qual-table, results='asis'}
+
+```
